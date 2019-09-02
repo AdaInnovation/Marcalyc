@@ -24,4 +24,4 @@ No dude en consultar [issues page](https://github.com/AdaInnovation/Marcalyc/iss
 
 ----
 ## 📝License
-GNU ©2019
+GNU ©2019 [Licencia](https://github.com/AdaInnovation/Marcalyc/blob/master/LICENSE)
