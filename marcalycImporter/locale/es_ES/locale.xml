@@ -7,6 +7,7 @@
 	<message key="plugins.importexport.marcalycImporter.displayName">Módulo de importación Marcalyc</message>
 	<message key="plugins.importexport.marcalycImporter.description">Importar un número completo creado en marcalyc y se importa en OJS.</message>
 	<message key="plugins.importexport.marcalycImporter.import">Importar</message>
+	<message key="plugins.importexport.marcalycImporter.settings">Ajustes</message>
 	<message key="plugins.importexport.marcalycImporter.import.instructions">Por favor, selecciona un archivo generado desde Marcalyc para subirlo y de clic en  en "Subir fichero". Cuando se haya completado la subida del archivo, de clic en "Importar" para insertar los datos.</message>
 	<message key="plugins.importexport.marcalycImporter.export">Exportar</message>
 
@@ -20,6 +21,15 @@
 	<message key="plugins.importexport.marcalycImporter.errorDecompress">No se pudo descomprimir el archivo, revise que el archivo sea de tipo zip</message>
 
 	<message key="plugins.importexport.marcalycImporter.again">Importar otro archivo</message>
+	<message key="plugins.importexport.marcalycImporter.ver_numeros">Ir a Próximos números</message>
 	<message key="plugins.importexport.marcalycImporter.noContent">No se encontraron datos del numero</message>
 
+
+	<message key="plugins.importexport.marcalycImporter.registrationIntro">Para poder utilizar el boton del Visor de Redalyc, introduzca la URL</message>
+	<message key="plugins.importexport.marcalycImporter.validarURL">¿Validar la disponibilidad del servicio de Marcalyc?</message>
+	<message key="plugins.importexport.marcalycImporter.url_visor">Ejemplo: http://www.redalyc.org/jatsRepo/</message>
+	<message key="plugins.importexport.marcalycImporter.updateOld">¿Actualizar los registros con esta URL?</message>
+	<message key="plugins.importexport.marcalycImporter.settingsDescription">Esta URL le permite acceder al visor de archivos</message>
+	
+	
 </locale>

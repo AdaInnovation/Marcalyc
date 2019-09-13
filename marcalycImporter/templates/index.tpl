@@ -13,6 +13,7 @@
 <div id="importExportTabs">
 	<ul>
 		<li><a href="#import-tab">{translate key="plugins.importexport.marcalycImporter.import"}</a></li>
+		<li><a href="#settings-tab">{translate key="plugins.importexport.marcalycImporter.settings"}</a></li>
 	</ul>
 	<div id="import-tab">
 		<script type="text/javascript">
@@ -44,6 +45,16 @@
 				{fbvFormButtons submitText="plugins.importexport.marcalycImporter.import" hideCancel="true"}
 			{/fbvFormArea}
 		</form>
+	</div>
+
+	<!--Tab setting  DOAJExportPlugin   MarcalycImportPlugin-->
+	<div id="settings-tab">
+
+		<!-- DOAJExportPlugin   MarcalycImportPlugin -->
+		
+		{capture assign=marcalycSettingsGridUrl}{url router=$smarty.const.ROUTE_COMPONENT component="grid.settings.plugins.settingsPluginGridHandler" op="manage" plugin="MarcalycImportPlugin" category="importexport" verb="index" escape=false}{/capture}
+		{load_url_in_div id="marcalycSettingsGridContainer" url=$marcalycSettingsGridUrl}
+		
 	</div>
 
 </div>

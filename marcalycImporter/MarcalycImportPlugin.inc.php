@@ -4,21 +4,32 @@
  * @file plugins/importexport/marcalycImporter/MarcalycImportPlugin.inc.php
  *
  * Copyright (c) 2019 
- * Distributed under the GNU GPL v2. For full terms see the file docs/COPYING.
+ * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
  *
  * @class MarcalycImportPlugin
  * @ingroup plugins_importexport_marcalycImporter
  *
  */
 
-import('lib.pkp.classes.plugins.ImportExportPlugin');
+//use PHPMailer\PHPMailer\Exception;
 
+import('classes.plugins.PubObjectsExportPlugin');
 
-class MarcalycImportPlugin extends ImportExportPlugin
+class MarcalycImportPlugin extends PubObjectsExportPlugin
 {
 	var $context;
 	var $submission;
 	var $request;
+
+	var $commonLangs = array(
+		'ca' =>	'ca_ES',
+		'es' => 'es_ES',
+		'en' => 'en_US',
+		'fr' => 'fr_FR',
+		'pl' => 'pl_PL',
+		'pt' => 'pt_PT',
+		'tr' => 'tr_TT'
+	);
 
 
 	/**
@@ -36,6 +47,7 @@ class MarcalycImportPlugin extends ImportExportPlugin
 
 		$success = parent::register($category, $path, $mainContextId);
 		$this->addLocaleData();
+		$this->import('ModelIssue');
 		return $success;
 	}
 
@@ -73,6 +85,21 @@ class MarcalycImportPlugin extends ImportExportPlugin
 	function getPluginSettingsPrefix()
 	{
 		return 'marcalycImporter';
+	}
+
+	function getExportDeploymentClassName()
+	{
+		return '';
+	}
+
+	function getSettingsFormClassName()
+	{
+		return 'MarcalycSettingsForm';
+	}
+
+	function depositXML($objects, $context, $jsonString)
+	{
+
 	}
 
 	/**
@@ -124,11 +151,13 @@ class MarcalycImportPlugin extends ImportExportPlugin
 
 			case 'import':
 				$statusMsg = "";
+				$Errores="";
 				AppLocale::requireComponents(LOCALE_COMPONENT_PKP_SUBMISSION);
 				$temporaryFileId = $request->getUserVar('temporaryFileId');
 				$temporaryFileDao = DAORegistry::getDAO('TemporaryFileDAO');
 				$user = $request->getUser();
 				$temporaryFile = $temporaryFileDao->getTemporaryFile($temporaryFileId, $user->getId());
+
 				if (!$temporaryFile) {
 					$json = new JSONMessage(true, __('plugins.inportexport.native.uploadFile'));
 					header('Content-Type: application/json');
@@ -141,8 +170,8 @@ class MarcalycImportPlugin extends ImportExportPlugin
 				$processingFilePath = $this->decompressZipFile($temporaryFilePath, $errorMsg, false);
 
 				if ($processingFilePath == false) {
-					$statusMsg .= __('plugins.importexport.marcalycImporter.errorDecompress');
-					$templateMgr->assign('Resultados', $statusMsg);
+					$Errores .= __('plugins.importexport.marcalycImporter.errorDecompress');
+					$templateMgr->assign('Errores', $Errores);
 					$json = new JSONMessage(true, $templateMgr->fetch($this->getTemplateResource('results.tpl')));
 					header('Content-Type: application/json');
 					return $json->getString();
@@ -153,50 +182,80 @@ class MarcalycImportPlugin extends ImportExportPlugin
 				$dirs = $this->cleanFileList($dirs);
 				$this->decompressZipFile($processingFilePath, $errorMsg, true);
 
-				$artIdx = 0;
-				$issueObj = null;
-				$articleData = $this->getDataByPath($processingFilePath);
+
+				$articleData = $this->getDataByPath($processingFilePath, $request);
+
 
 				if (empty($articleData)) {
-					$statusMsg .= __('plugins.importexport.marcalycImporter.noContent');
-					$templateMgr->assign('Resultados', $statusMsg);
+					$Errores .= __('plugins.importexport.marcalycImporter.noContent');
+					$templateMgr->assign('Errores', $Errores);
 					$json = new JSONMessage(true, $templateMgr->fetch($this->getTemplateResource('results.tpl')));
 					header('Content-Type: application/json');
 					return $json->getString();
 				}
 
-				//$statusMsg = "<ul class='list-group'>";
+				if(!is_array($articleData)){
+					$templateMgr->assign('Errores', $articleData);
+					$json = new JSONMessage(true, $templateMgr->fetch($this->getTemplateResource('results.tpl')));
+					header('Content-Type: application/json');
+					return $json->getString();
+				}
 
-				$numeroMsg="";
-				$articulosMsg="";
-				foreach ($articleData as $k => $ad) {
+
+				$numeroMsg = "";
+				$articulosMsg = "";
+
+				//solo insertar datos
+				$id_issue = "";
+				$artIdx = 0;
+				foreach ($articleData as $data) {
 					if ($artIdx == 0) {
-						$issueObj = $this->createNumber($ad, $request);
-						if ($issueObj == null) {
-							$errorMsg = "Ocurrio un error al importar el numero";
-							$templateMgr->assign('Resultados', $errorMsg);
-							$json = new JSONMessage(true, $templateMgr->fetch($this->getTemplateResource('results.tpl')));
-							header('Content-Type: application/json');
-							return $json->getString();
-						}
-						$numeroMsg .="<h3 style='text-align: center;'> = Resultados =</h3>";
-						$numeroMsg .= "<h4>Vol. " . $issueObj->getVolume() . " Num " . $issueObj->getNumber() . "</h4>";
-						$numeroMsg .= "<h4>Articulos importados:</h4>";
+						$id_issue = $this->add_Number($data->getNumero());
 						$artIdx++;
 					}
 
-					$tituloArticulo = $this->createArticle($ad, $issueObj->getId());
-					$article_id = $this->insert_url($ad, $request->getContext()->getId());
-					$this->insert_files_pdf($processingFilePath, $article_id, $request->getContext()->getId());
-					$this->insert_files_epub($processingFilePath, $article_id, $request->getContext()->getId());
-					$this->insert_files_html($processingFilePath, $article_id, $request->getContext()->getId());
-					$this->assignAuthorsArticle($ad);
-					$articulosMsg .= 	"<li class='list-group-item'> " . $tituloArticulo . " </li>";
-					
+					$id_article = $this->add_Article($data, $id_issue);
+					$this->add_AuthorsArticle($data->Autores);
+					$this->insert_url($data, $request->getContext()->getId());
+					$this->insert_files_pdf($processingFilePath, $data->article_id_redalyc, $request->getContext()->getId());
+					$this->insert_files_epub($processingFilePath, $data->article_id_redalyc, $request->getContext()->getId());
+					$this->insert_files_html($processingFilePath, $data->article_id_redalyc, $request->getContext()->getId());
 				}
-				$statusMsg.=$numeroMsg;
-				$statusMsg .="<ul class='list-group'>".$articulosMsg."</ul>";
-				$templateMgr->assign('Resultados', $statusMsg);
+				
+
+				//imprimir resusltados
+				$imprimirTitulo = true;
+				$resultados = "";
+				foreach ($articleData as $data) {
+					if ($imprimirTitulo) {
+						$resultados .= "<h3 style='text-align: center;'> = Resultados =</h3>";
+						$resultados .= "<h4>Vol. " . $data->getNumero()->getVolume() . " Num " . $data->getNumero()->getNumber() . "</h4>";
+						$imprimirTitulo = false;
+					}
+					$titulo = "";
+					foreach ($data->title as $k => $tl) {
+						$titulo = $tl;
+						break;
+					}
+					$resultados .= "<div style='font-size:15px; color:gray'>[" . $data->categoria_articulo . "]</div>";
+					$resultados .= "<div class='list-group-item' style='color:black'> " . $titulo . "</div>";
+				}
+
+				import('lib.pkp.classes.file.FileManager');
+				$fileManager = new FileManager();
+				$fileManager->deleteByPath($temporaryFilePath);
+				$fileManager->rmtree($temporaryFilePath . "_1");
+				
+				$protocolo= $request->_protocol;
+				$servidor= $request->_serverHost;
+				$aplicacion=$request->_basePath;
+				$nombre_revista = $request->getRequestedJournalPath();
+				
+				// url para el boton de ver numeros
+				$ver_numeros_url=$protocolo."://".$servidor.$aplicacion."/index.php/".$nombre_revista."/manageIssues#futureIssues";
+
+				$templateMgr->assign('numeros_url', $ver_numeros_url);
+				$templateMgr->assign('Resultados', $resultados);
 				$json = new JSONMessage(true, $templateMgr->fetch($this->getTemplateResource('results.tpl')));
 				header('Content-Type: application/json');
 				return $json->getString();
@@ -206,6 +265,47 @@ class MarcalycImportPlugin extends ImportExportPlugin
 				$dispatcher = $request->getDispatcher();
 				$dispatcher->handle404();
 		}
+	}
+
+	/**
+	 * Metodo para validacion de existencia del numero y la seccion
+	 * 
+	 * @param Articulo $articulo datos del xml
+	 * @param bool $validarNum Opcion para evitar validar todos los numero si son iguales
+	 * @return Articulo $articulo El mismo objeto con los datos validados
+	 */
+	function validarArticulo($articulo,$validarNum)
+	{
+		//validar numero
+		if($validarNum){
+			$numero = $articulo->getNumero()->getNumber();
+			$volume = $articulo->getNumero()->getVolume();
+			$anio = $articulo->getNumero()->getYear();
+			$existe_numero = $this->validarNumero($volume, $numero, $anio);
+			if ($existe_numero) {
+				$articulo->getNumero()->setStatus(202);
+			} else {
+				$articulo->getNumero()->setStatus(404);
+			}
+		}else{
+			$articulo->getNumero()->setStatus(404);
+		}
+		
+		//validar seccion
+		
+		if($articulo->categoria_articulo=="Sin sección" || $articulo->categoria_articulo==""){
+			$existe_seccion=$this->validarSeccion();
+		}else{
+			$existe_seccion=$this->validarSeccion($articulo->categoria_articulo);
+		}
+
+		if($existe_seccion==null){
+			$existe_seccion=$this->add_section($articulo->categoria_articulo);
+		}
+
+		$articulo->categoria_id=$existe_seccion;
+
+		return $articulo;
 	}
 
 	/**
@@ -219,37 +319,47 @@ class MarcalycImportPlugin extends ImportExportPlugin
 	private function insert_url($articleData, $context_id)
 	{
 		//Get Journal-id and article-id
-		$journal_id_nodo = $articleData->getElementsByTagName("journal-id");
-		$journal_id = "";
-		foreach ($journal_id_nodo as $k => $tl) {
-			$journal_id = $tl->nodeValue;
-		}
-
-		$article_id_nodo = $articleData->getElementsByTagName("article-id");
-		$article_id = "";
-		foreach ($article_id_nodo as $k => $tl) {
-			$article_id = $tl->nodeValue;
-		}
-
+		$journal_id = $articleData->journal_id_redalyc;
+		$article_id = $articleData->article_id_redalyc;
 		//url del visor de redalyc
-		$link_visor = "http://www.redalyc.org/jatsRepo/" . $journal_id . "/" . $article_id . "/index.html";
-		$existe_url = $this->validarURL($link_visor);
+		//$link_visor = "http://www.redalyc.org/jatsRepo/" . $journal_id . "/" . $article_id . "/index.html";
+
+		$pluginSettingsDao = DAORegistry::getDAO('PluginSettingsDAO');
+		$plugin_settings_exist = $pluginSettingsDao->settingExists($context_id, "marcalycimportplugin", "url_visor");
+		$link_temp = "http://www.redalyc.org/jatsRepo/";
+		$validar_url = false;
+		if (!$plugin_settings_exist) {
+			$pluginSettingsDao->updateSetting($context_id, "marcalycimportplugin", "url_visor", $link_temp, "string");
+			$pluginSettingsDao->updateSetting($context_id, "marcalycimportplugin", "updateOld", 0, "bool");
+			$pluginSettingsDao->updateSetting($context_id, "marcalycimportplugin", "validarURL", 1, "bool");
+		} else {
+			$plugin_settings = $pluginSettingsDao->getPluginSettings($context_id, "marcalycimportplugin");
+			$link_temp = $plugin_settings["url_visor"];
+			$validar_url = $plugin_settings["validarURL"];
+		}
+
+		$link_visor = $link_temp . $journal_id . "/" . $article_id . "/index.html";
+
+		$existe_url = true;
+		if ($validar_url) {
+			$existe_url = $this->validarURL($link_visor);
+		}
+
 		if ($existe_url) {
 			$this->add_galley(null, "URL", null, $context_id, $this->submissionId, $link_visor);
 		}
-		return $article_id;
 	}
 
 	/**
 	 * Permite la insercion de archivos PDF al galley del articulo
 	 * 
 	 * @param string $path ruta donde se encuentran los archivos del articulo
-	 * @param string $article_id id con el cual el xml identifica al articulo
+	 * @param string $idArticleRedalyc id que se encuentra en el xml
 	 * @param int $context_id id de la revista
 	 */
-	private function insert_files_pdf($path, $article_id, $context_id)
+	private function insert_files_pdf($path, $idArticleRedalyc, $context_id)
 	{
-		$todas_las_concidencias = $this->findFilesByName($path, $article_id, "pdf");
+		$todas_las_concidencias = $this->findFilesByName($path, $idArticleRedalyc, "pdf");
 		$archivos_upload = $this->quitar_archivos_basura($todas_las_concidencias);
 		foreach ($archivos_upload as $file) {
 			$this->add_galley($file, "PDF", null, $context_id, $this->submissionId, "");
@@ -260,12 +370,12 @@ class MarcalycImportPlugin extends ImportExportPlugin
 	 * Permite la insercion de archivos EPUB al galley del articulo
 	 * 
 	 * @param string $path ruta donde se encuentran los archivos del articulo
-	 * @param string $article_id id con el cual el xml identifica al articulo
+	 * @param string $idArticleRedalyc id que se encuentra en el xml
 	 * @param int $context_id id de la revista
 	 */
-	private function insert_files_epub($path, $article_id, $context_id)
+	private function insert_files_epub($path, $idArticleRedalyc, $context_id)
 	{
-		$todas_las_concidencias = $this->findFilesByName($path, $article_id, "epub");
+		$todas_las_concidencias = $this->findFilesByName($path, $idArticleRedalyc, "epub");
 		$archivos_upload = $this->quitar_archivos_basura($todas_las_concidencias);
 		foreach ($archivos_upload as $file) {
 			$this->add_galley($file, "EPUB", null, $context_id, $this->submissionId, "");
@@ -277,12 +387,23 @@ class MarcalycImportPlugin extends ImportExportPlugin
 	 * asi como sus archivos complementos
 	 * 
 	 * @param string $path ruta donde se encuentran los archivos del articulo
-	 * @param string $article_id id con el cual el xml identifica al articulo
+	 * @param string $idArticleRedalyc id que se encuentra en el xml
 	 * @param int $context_id id de la revista
 	 */
-	private function insert_files_html($path, $article_id, $context_id)
+	private function insert_files_html($path, $idArticleRedalyc, $context_id)
 	{
-		$todas_las_concidencias = $this->findFilesByName($path, $article_id, "png");
+		$todas_las_concidencias = $this->findFilesByName($path, $idArticleRedalyc, "png");
+		if(empty($todas_las_concidencias)){
+			//buscar en los archivos txt
+			$todas_las_concidencias = $this->findFilesByName($path, $idArticleRedalyc, "txt");
+			
+			if(empty($todas_las_concidencias)){
+				return null;
+			}
+		}
+
+		
+
 		$coincidencias = $this->quitar_archivos_basura($todas_las_concidencias);
 		$path_html_directory = $this->find_path_html($coincidencias);
 		$archivo_index = $this->obtener_archivos($path_html_directory, true, "html");
@@ -292,21 +413,156 @@ class MarcalycImportPlugin extends ImportExportPlugin
 		$assoc_id = $this->add_galley($file_index, "HTML", null, $context_id, $this->submissionId, "");
 
 		$archivos_png = $this->obtener_archivos($path_html_directory, false, "png");
-		//$archivos_jpg = $this->obtener_archivos($path_html_directory,false,"jpg");
+		$archivos_jpg = $this->obtener_archivos($path_html_directory, false, "jpg");
+		$archivos_gif = $this->obtener_archivos($path_html_directory, false, "gif");
 		$archivos_css = $this->obtener_archivos($path_html_directory, false, "css");
 
 		//Cargar los archivos complementarios PNG
-
-
 		foreach ($archivos_png as $archivo) {
 			$file_png = $path_html_directory . DIRECTORY_SEPARATOR . $archivo;
 			$this->add_galley($file_png, "png", $assoc_id->getFileId(), $context_id, $this->submissionId, "");
+		}
+
+		//Cargar los archivos complementarios GIF
+		foreach ($archivos_gif as $archivo) {
+			$file_png = $path_html_directory . DIRECTORY_SEPARATOR . $archivo;
+			$this->add_galley($file_png, "gif", $assoc_id->getFileId(), $context_id, $this->submissionId, "");
+		}
+
+		//Cargar los archivos complementarios jpg
+		foreach ($archivos_jpg as $archivo) {
+			$file_png = $path_html_directory . DIRECTORY_SEPARATOR . $archivo;
+			$this->add_galley($file_png, "jpg", $assoc_id->getFileId(), $context_id, $this->submissionId, "");
 		}
 
 		//Cargar los archivos complementarios CSS
 		foreach ($archivos_css as $archivo) {
 			$file_css = $path_html_directory . DIRECTORY_SEPARATOR . $archivo;
 			$this->add_galley($file_css, "css", $assoc_id->getFileId(), $context_id, $this->submissionId, "");
+		}
+	}
+
+	/**
+	 * Este metodo permite la insercion del numero a la base de datos
+	 * 
+	 * @param Numero $datos_autores Objeto con los datos del numero a insertar
+	 * @return int $issueDao Id del Issue
+	 */
+	private function add_Number($datos_numero)
+	{
+		$issueDao = DAORegistry::getDAO('IssueDAO');
+		$issue = $issueDao->newDataObject();
+		$issue->setAccessStatus(ISSUE_ACCESS_OPEN);
+		$issue->setTitle($datos_numero->getTitle(), null); // Localized
+		$issue->setJournalId($datos_numero->getJournalId());
+		$issue->setVolume($datos_numero->getVolume());
+		$issue->setNumber($datos_numero->getNumber());
+		$issue->setYear($datos_numero->getYear());
+		$issue->setPublished(0);
+		$issue->setCurrent(0);
+
+		return $issueDao->insertObject($issue);
+	}
+
+	/**
+	 * Este metodo permite la insercion de los articulos a la base de datos
+	 * 
+	 * @param obj $datos_articulo Objeto que contiene todos los datos del articulo
+	 * @param int $issueId Id del numero al cual pertenece el articulo
+	 * @return int $submissionId Regresa el id de submission
+	 */
+	private function add_Article($datos_articulo, $issueId)
+	{
+
+		$date = Core::getCurrentDate();
+		/*
+		$locale = AppLocale::getLocale();
+		$sectionDao = DAORegistry::getDAO('SectionDAO');
+		*/
+		$submissionDao = Application::getSubmissionDAO();
+		$submission = $submissionDao->newDataObject();
+		$submission->setContextId($this->context->getId());
+		$submission->setStatus(STATUS_PUBLISHED);
+		$submission->setSubmissionProgress(0);
+		$submission->stampStatusModified();
+		$submission->setStageId(WORKFLOW_STAGE_ID_SUBMISSION);
+		$submission->setSectionId($datos_articulo->categoria_id);
+		$submission->setLocale(AppLocale::getLocale());
+		$submission->setDateSubmitted($date);
+		$lang = $datos_articulo->language;
+		$submission->setLanguage($lang);
+
+		foreach ($datos_articulo->title as $k => $tl) {
+			$submission->setTitle($tl, $k);
+		}
+
+		if( isset($datos_articulo->abstract)){
+			foreach ($datos_articulo->abstract as $k => $al) {
+				$submission->setAbstract($al, $k);
+			}
+		}
+
+
+		$this->submissionId = $submissionDao->insertObject($submission);
+		$user = $this->request->getUser();
+		$userGroupAssignmentDao = DAORegistry::getDAO('UserGroupAssignmentDAO');
+		$userGroupDao = DAORegistry::getDAO('UserGroupDAO');
+		$userGroupId = null;
+		$managerUserGroupAssignments = $userGroupAssignmentDao->getByUserId($user->getId(), $this->context->getId(), ROLE_ID_MANAGER);
+		if ($managerUserGroupAssignments) {
+			while ($managerUserGroupAssignment = $managerUserGroupAssignments->next()) {
+				$managerUserGroup = $userGroupDao->getById($managerUserGroupAssignment->getUserGroupId());
+				$userGroupId = $managerUserGroup->getId();
+				break;
+			}
+		}
+		// Assign the user author to the stage
+		$stageAssignmentDao = DAORegistry::getDAO('StageAssignmentDAO');
+		$stageAssignmentDao->build($this->submissionId, $userGroupId, $user->getId());
+
+		$publishedArticleDao = DAORegistry::getDAO('PublishedArticleDAO');
+		$publishedArticle = $publishedArticleDao->newDataObject();
+		$publishedArticle->setId($this->submissionId);
+		$publishedArticle->setIssueId($issueId);
+		$publishedArticle->setDatePublished($date);
+		$publishedArticle->setSequence(REALLY_BIG_NUMBER);
+		$publishedArticle->setAccessStatus(0);
+		$publishedArticleDao->insertObject($publishedArticle);
+
+		return $this->submissionId;
+	}
+
+	/**
+	 * Este metodo permite la insercion de los autores a la base de datos
+	 * 
+	 * @param array $datos_autores Datos de los autores
+	 *   
+	 */
+	private function add_AuthorsArticle($datos_autores)
+	{
+		$authorDao = DAORegistry::getDAO('AuthorDAO');
+
+		foreach ($datos_autores as $k => $autor) {
+
+			$givenName[AppLocale::getLocale()] = $autor->nombre;
+			$surName[AppLocale::getLocale()] = $autor->apellidos;
+			$author = $authorDao->newDataObject();
+			$author->setGivenName($givenName, null);
+			$author->setFamilyName($surName, null);
+			$affilliation[AppLocale::getLocale()] = $autor->institucion;
+			$author->setAffiliation($affilliation, null);
+			$author->setCountry($autor->pais);
+			$author->setEmail($autor->email);
+			$publicName[AppLocale::getLocale()] = "";
+			$author->setPreferredPublicName($publicName, null);
+			$biography[AppLocale::getLocale()] = "";
+			$author->setBiography($biography, null);
+			$author->setIncludeInBrowse(1);
+			$author->setOrcid("");
+			$author->setUserGroupId(14);
+			$author->setSubmissionId($this->submissionId);
+
+			$authorDao->insertObject($author);
 		}
 	}
 
@@ -328,6 +584,7 @@ class MarcalycImportPlugin extends ImportExportPlugin
 		$revisedFileId = null;
 		$assocType = 521;
 		$assocId = null;
+		$genreId = null;
 		if ($complement != null) {
 			$assocType = 515;
 			$assocId = $complement;
@@ -351,13 +608,26 @@ class MarcalycImportPlugin extends ImportExportPlugin
 			//insertar a DB
 			import('lib.pkp.classes.file.SubmissionFileManager');
 			$submissionFileManager = new SubmissionFileManager($journal_id, $submission_id);
-			$submissionFile = $submissionFileManager->_instantiateSubmissionFile($file, $fileStage, $revisedFileId, $genreId, $assocType, $assocId);
+			try{
+				$submissionFile = $submissionFileManager->_instantiateSubmissionFile($file, $fileStage, $revisedFileId, $genreId, $assocType, $assocId);
+			}catch(Exception $e){
+				$error=$e;
+				$er="";
+			}
+			
 
 			if (is_null($submissionFile)) return null;
-
+			//obtener el tipo de archivo
 			$fileType = mime_content_type($file);
 			assert($fileType !== false);
-			//obtener el tipo de archivo
+
+			//validacion para que se vean los CSS
+			$findCSS   = 'text/x-asm';
+			$pos = strpos($fileType, $findCSS);
+			if ($pos !== false) {
+				$fileType = "text/css";
+			}
+
 			$submissionFile->setFileType($fileType);
 			$originalFileName = basename($file);
 			assert($originalFileName !== false);
@@ -411,6 +681,42 @@ class MarcalycImportPlugin extends ImportExportPlugin
 
 			return $submision;
 		}
+	}
+
+	/**
+	 * Este metodo te permite insertar una seccion en la base de datos
+	 * 
+	 * @param string $seccion_name Nombre de la seccion a agregar
+	 * @return int $sectionId Id de la seccion insertada
+	 */
+	private function add_section($section_name){
+		$sectionDao = DAORegistry::getDAO('SectionDAO');
+		$journal = Application::getRequest()->getJournal();
+
+		$locale = AppLocale::getLocale();
+		$valor_vacio = array($locale=>"");
+		$title=array($locale=>$section_name);
+
+		$abr= str_split($section_name, 2);
+		$section = $sectionDao->newDataObject();
+		$section->setJournalId($journal->getId());
+		$section->setTitle($title, null); 
+		$section->setAbbrev($abr[0],null); 
+		$section->setReviewFormId(0);
+		$section->setMetaIndexed(1); 
+		$section->setMetaReviewed(1); 
+		$section->setAbstractsNotRequired(0);
+		$section->setIdentifyType($valor_vacio,null);
+		$section->setEditorRestricted(0);
+		$section->setHideTitle(0);
+		$section->setHideAuthor(0);
+		$section->setPolicy($valor_vacio,null); 
+		$section->setAbstractWordCount(0);
+
+		$section->setSequence(REALLY_BIG_NUMBER);
+		$sectionId=$sectionDao->insertObject($section);
+		$sectionDao->resequenceSections($journal->getId());
+		return $sectionId;
 	}
 
 	/**
@@ -470,120 +776,6 @@ class MarcalycImportPlugin extends ImportExportPlugin
 		return $response;
 	}
 
-	private function createNumber($articleData, $request)
-	{
-		$journal = $request->getJournal();
-		$issueMonth = $articleData->getElementsByTagName('season');
-		$issueMonth = $issueMonth->item(0)->nodeValue;
-		$issueYear = $articleData->getElementsByTagName('year');
-		$issueYear = $issueYear->item(0)->nodeValue;
-		$issueNumber = $articleData->getElementsByTagName('issue');
-		$issueNumber = $issueNumber->item(0)->nodeValue;
-		$issueVolume = $articleData->getElementsByTagName('volume');
-		$volume = $issueVolume->length == 0 ? "0" : $issueVolume->item(0)->nodeValue;
-
-
-
-		//	echo $issueMonth . ' - ' . $issueNumber . ' - ' . $issueYear;
-		$issueDao = DAORegistry::getDAO('IssueDAO');
-		$issue = $issueDao->newDataObject();
-		$issue->setAccessStatus(ISSUE_ACCESS_OPEN);
-		$issue->setTitle($issueMonth, null); // Localized
-		$issue->setJournalId($journal->getId());
-		$issue->setVolume($volume);
-		$issue->setNumber(empty($issueNumber) ? 0 : $issueNumber);
-		$issue->setYear(empty($issueYear) ? 0 : $issueYear);
-		//	$issue->setDatePublished($this->getData('datePublished'));
-		$issue->setPublished(0);
-		$issue->setCurrent(0);
-		$status_insert = $issueDao->insertObject($issue);
-		if ($status_insert != null || $status_insert > 0) {
-			return $issue;
-		} else {
-			return null;
-		}
-	}
-
-	private function createArticle($articleData, $issueId)
-	{
-		$commonLangs = array(
-			'es' => 'es_ES',
-			'en' => 'en_US'
-		);
-		$date = Core::getCurrentDate();
-		$locale = AppLocale::getLocale();
-		$sectionDao = DAORegistry::getDAO('SectionDAO');
-		$sectionOptions = $sectionDao->getTitlesByContextId($this->context->getId());
-		$submissionDao = Application::getSubmissionDAO();
-		$submission = $submissionDao->newDataObject();
-		$submission->setContextId($this->context->getId());
-		$submission->setStatus(STATUS_PUBLISHED);
-		$submission->setSubmissionProgress(0);
-		$submission->stampStatusModified();
-		$submission->setStageId(WORKFLOW_STAGE_ID_SUBMISSION);
-		$submission->setSectionId(1);
-		$submission->setLocale(AppLocale::getLocale());
-		$submission->setDateSubmitted($date);
-		$lang = $articleData->getElementsByTagName("article")[0]->getAttribute('xml:lang');
-		$submission->setLanguage($lang);
-
-		$titleLang = $articleData->getElementsByTagName("article-title");
-		$titulo_articulo = "";
-		foreach ($titleLang as $k => $tl) {
-			$xmlLang = $tl->getAttribute('xml:lang');
-			$titulo_articulo = $tl->nodeValue;
-			$submission->setTitle($titulo_articulo, $commonLangs[$xmlLang]);
-		}
-
-		$abstractLang = $articleData->getElementsByTagName("abstract");
-		foreach ($abstractLang as $k => $al) {
-			$xmlLang = $al->getAttribute('xml:lang');
-			$titleAbs = $al->getElementsByTagName('title')->item(0);
-			$al->removeChild($titleAbs);
-			$submission->setAbstract($al->nodeValue, $commonLangs[$xmlLang]);
-		}
-
-
-		$transAbstract = $articleData->getElementsByTagName("trans-abstract");
-		foreach ($transAbstract as $k => $ta) {
-			$xmlLang = $ta->getAttribute('xml:lang');
-			$titleAbs = $ta->getElementsByTagName('title')->item(0);
-			$ta->removeChild($titleAbs);
-			$submission->setAbstract($ta->nodeValue, $commonLangs[$xmlLang]);
-		}
-
-		$this->submissionId = $submissionDao->insertObject($submission);
-		//$this->setData('submissionId', $this->submissionId);
-		//$this->_metadataFormImplem->initData($submission);
-		// Add the user manager group (first that is found) to the stage_assignment for that submission
-		$user = $this->request->getUser();
-		$userGroupAssignmentDao = DAORegistry::getDAO('UserGroupAssignmentDAO');
-		$userGroupDao = DAORegistry::getDAO('UserGroupDAO');
-		$userGroupId = null;
-		$managerUserGroupAssignments = $userGroupAssignmentDao->getByUserId($user->getId(), $this->context->getId(), ROLE_ID_MANAGER);
-		if ($managerUserGroupAssignments) {
-			while ($managerUserGroupAssignment = $managerUserGroupAssignments->next()) {
-				$managerUserGroup = $userGroupDao->getById($managerUserGroupAssignment->getUserGroupId());
-				$userGroupId = $managerUserGroup->getId();
-				break;
-			}
-		}
-		// Assign the user author to the stage
-		$stageAssignmentDao = DAORegistry::getDAO('StageAssignmentDAO');
-		$stageAssignmentDao->build($this->submissionId, $userGroupId, $user->getId());
-
-		$publishedArticleDao = DAORegistry::getDAO('PublishedArticleDAO');
-		$publishedArticle = $publishedArticleDao->newDataObject();
-		$publishedArticle->setId($this->submissionId);
-		$publishedArticle->setIssueId($issueId);
-		$publishedArticle->setDatePublished($date);
-		$publishedArticle->setSequence(REALLY_BIG_NUMBER);
-		$publishedArticle->setAccessStatus(0);
-		$publishedArticleDao->insertObject($publishedArticle);
-
-		return $titulo_articulo;
-	}
-
 	/**
 	 * Permite validar que la url es valida
 	 * 
@@ -603,90 +795,268 @@ class MarcalycImportPlugin extends ImportExportPlugin
 	}
 
 	/**
-	 * Permite quitar archivos que se encuentran dentro de la carpeta MACOSX
-	 * los cuales se consideran basura
+	 * Metodo para la validacion de la existencia de el volumen numero y año en la base de datos
 	 * 
-	 * @param array $archivos Es un array de archivos
-	 * @return array $files Array con los archivos limpios
+	 * @param string $volume	
+	 * @param string $number
+	 * @param string $year
+	 * @return bool $returner Si existe alguna coincidencia con los parametros regresa true,false en otro caso
 	 */
-	private function quitar_archivos_basura($archivos)
+	private function validarNumero($volume, $number, $year)
 	{
-		$files = array();
-		foreach ($archivos as $file) {
-			if (strpos($file, '__MACOSX') === false) {
-				array_push($files, $file);
-			}
+		$journal = $this->request->getJournal();
+		
+		$issueDao = DAORegistry::getDAO('IssueDAO');
+		$result = $issueDao->retrieve(
+			'SELECT i.* FROM issues i WHERE journal_id = ? AND volume = ? AND number = ? AND year = ?',
+			array((int) $journal->getId(), $volume, $number, $year)
+		);
+		$returner = $result->RecordCount() != 0 ? true : false;
+		$result->Close();
+		return $returner;
+	}
+
+	/**
+	 * Metodo para la validacion de la existencia de la seccion
+	 * 
+	 * @param string $seccion Nombre de la seccion a buscar, si no existe toma por default "Articulos"
+	 * @return int $row["section_id"] Id de la Seccion encontrada o null en caso de no encontrar la seccion
+	 * 
+	 */
+	private function validarSeccion($seccion="Articulos"){
+		$sectionDao = DAORegistry::getDAO('SectionDAO');
+		$journal = Application::getRequest()->getJournal();
+
+		$params = array($seccion);
+		$sql = 'SELECT section_id FROM section_settings WHERE setting_value = ?';
+		$result = $sectionDao->retrieve($sql, $params);
+		if ($result->RecordCount() != 0) {
+			$row=$result->GetRowAssoc(false);
+			return $row["section_id"];
 		}
-		return $files;
+		$result->Close();
+		return null;
+		
 	}
 
-	private function assignAuthorsArticle($articleData)
-	{
-		$authorDao = DAORegistry::getDAO('AuthorDAO');
-		$xpath = new DOMXPath($articleData);
-		$authors = $xpath->query("//contrib-group/contrib[@contrib-type='author']");
-		foreach ($authors as $k => $author) {
-			$authorSurName = $xpath->query("//name/surname", $author);
-			$authorSurName = $authorSurName[$k]->textContent;
-			$authorGivenName = $xpath->query("//name/given-names", $author);
-			$authorGivenName = $authorGivenName[$k]->textContent;
-			$authorEmail = $xpath->query(".//email", $author);
-			$authorEmail = $authorEmail[0]->textContent;
-
-			$authorXref = $xpath->query(".//xref/@rid", $author);
-			$authorXref = $authorXref[0]->textContent;
-			$aff = $xpath->query(".//aff[@id='" . $authorXref . "']");
-			$aff = $aff[0];
-			$authorInstitution = $xpath->query(".//institution", $aff);
-			$authorInstitution = $authorInstitution[0]->textContent;
-			$authorCountry = $xpath->query(".//country/@country", $aff);
-			$authorCountry = $authorCountry[0]->textContent;
-
-			$givenName[AppLocale::getLocale()] = $authorGivenName;
-			$surName[AppLocale::getLocale()] = $authorSurName;
-			$author = $authorDao->newDataObject();
-			$author->setGivenName($givenName, null);
-			$author->setFamilyName($surName, null);
-			$affilliation[AppLocale::getLocale()] = $authorInstitution;
-			$author->setAffiliation($affilliation, null);
-			$author->setCountry($authorCountry);
-			$author->setEmail($authorEmail);
-			$publicName[AppLocale::getLocale()] = "";
-			$author->setPreferredPublicName($publicName, null);
-			$biography[AppLocale::getLocale()] = "";
-			$author->setBiography($biography, null);
-			$author->setIncludeInBrowse(1);
-			$author->setOrcid("");
-			$author->setUserGroupId(14);
-			$author->setSubmissionId($this->submissionId);
-			$authorDao->insertObject($author);
-		}
-	}
-
-	/** */
-	private function cleanFileList($dirs)
-	{
-		$dirs = array_diff($dirs, array('.', '..', '__MACOSX', '.DS_Store'));
-		return $dirs;
-	}
-
+	/**
+	 * Metodo para obtener todos los datos del zip
+	 * 
+	 * @param string $articleFolder Ruta del Directorio descomprimido
+	 * @return array $articleData Array con los datos del zip
+	 * 
+	 */
 	private function getDataByPath($articleFolder)
 	{
 		$articleData = array();
 		$dirs = scandir($articleFolder);
+		//Se limpia la ruta de archivos basura
 		$dir = array_values($this->cleanFileList($dirs));
 		$articleDir = str_replace(' ', '\ ', $articleFolder . DIRECTORY_SEPARATOR . $dir[0]);
+		//Se buscan todos los archivos xml
 		$xmlFiles = $this->findFilesByExtension($articleDir, 'xml');
+		$contador_articulos = 0;
+
+		$numero="";
+		$volumen="";
+		$error="";
 		foreach ($xmlFiles as $xf) {
 			$xmlJats = file_get_contents($xf);
 			$xmlJatsDom = new DOMDocument();
 			if (!$xmlJatsDom->loadXML($xmlJats)) {
-				//$this->logger->debugTranslate('marcalicImporter.erros.loadxml', $this->libxmlErrors());
+				//Error al abrir el xml
 				return false;
 			}
-			$articleData[$xf] = $xmlJatsDom;
+
+			$datos_articulo = $this->leerXML($xmlJatsDom, $this->request, $contador_articulos);
+			
+			$validar_existencia_numero=true;
+			if($contador_articulos==0){
+				$numero = $datos_articulo->getNumero()->getNumber();
+				$volumen = $datos_articulo->getNumero()->getVolume();
+			}else{
+				$numero_a = $datos_articulo->getNumero()->getNumber();
+				$volume_a = $datos_articulo->getNumero()->getVolume();
+				//Valida que el los articulos pertenescan al mismo volumen y numero
+				if($numero == $numero_a && $volumen == $volume_a){
+					$validar_existencia_numero=false;
+				}else{
+					$error.="Error: No coinciden Volumen-Numero en el ID: ".$datos_articulo->article_id_redalyc."</br>";
+				}
+			}
+
+			//Se validan las datos que contiene este articulo
+			$datos_articulo = $this->validarArticulo($datos_articulo, $validar_existencia_numero);
+			
+			//Se agrega un error en caso de existir el Numero en la base de datos
+			if($datos_articulo->getNumero()->Status==202){
+				$error.="Error: Ya existe el Volumen ".$volumen." Numero ".$numero;
+			}
+
+			array_push($articleData, $datos_articulo);
+			$contador_articulos++;
 		}
+
+		// Si contienen errores la lectura del archivo se regresan estos
+		if($error!=""){
+			return $error;
+		}
+
+		// Si no contienen errores, se regresan los datos
 		return $articleData;
+	}
+
+	/**
+	 * Permite leer el xml y convertirlo en un objeto
+	 * 
+	 * @param DOMDocument $xml El DOM del xml
+	 * @param int $index Identificador extra del arreglo
+	 * @return Articulo $submission Objeto que contiene todos los datos del xml
+	 */
+	private function leerXML($xml, $index)
+	{
+		//objeto principal
+		$submission = new Articulo($index, "", "");
+		$journal = $this->request->getJournal();
+		
+		$issueMonth = $xml->getElementsByTagName('season');
+		if(sizeof($issueMonth)==0){
+			$issueMonth = "";
+		}else{
+			$issueMonth = $issueMonth->item(0)->nodeValue;
+		}
+		
+		
+		$issueYear = $xml->getElementsByTagName('year');
+		$issueYear = $issueYear->item(0)->nodeValue;
+		$issueNumber = $xml->getElementsByTagName('issue');
+		$issueNumber = $issueNumber->item(0)->nodeValue;
+		$issueVolume = $xml->getElementsByTagName('volume');
+		$volume = $issueVolume->length == 0 ? 1 : $issueVolume->item(0)->nodeValue;
+		$numero = empty($issueNumber) ? 0 : $issueNumber;
+		$anio = empty($issueYear) ? 0 : $issueYear;
+
+		//se guardan los datos del numero en el objeto Numero
+		$mi_numero = new Numero($journal->getId(), $issueMonth, $volume, $numero, $anio);
+		
+		$lang = $xml->getElementsByTagName("article")[0]->getAttribute('xml:lang');
+		$submission->setLanguage($lang);
+		//obtiene el titulo del articulo
+		$titleLang = $xml->getElementsByTagName("article-title");
+		$titulo_articulo = "";
+		foreach ($titleLang as $k => $tl) {
+			$xmlLang = $tl->getAttribute('xml:lang');
+			$titulo_articulo = $tl->nodeValue;
+			if($xmlLang!=""){
+				$submission->setTitle($titulo_articulo, $this->commonLangs[$xmlLang]);
+			}
+			
+		}
+		//obtine el idioma principal
+		$abstractLang = $xml->getElementsByTagName("abstract");
+		foreach ($abstractLang as $k => $al) {
+			$xmlLang = $al->getAttribute('xml:lang');
+			$titleAbs = $al->getElementsByTagName('title')->item(0);
+			$al->removeChild($titleAbs);
+			$submission->setAbstract($al->nodeValue, $this->commonLangs[$xmlLang]);
+		}
+
+		//obtine los resumenes en y sus idiomas
+		$transAbstract = $xml->getElementsByTagName("trans-abstract");
+		foreach ($transAbstract as $k => $ta) {
+			$xmlLang = $ta->getAttribute('xml:lang');
+			$titleAbs = $ta->getElementsByTagName('title')->item(0);
+			$ta->removeChild($titleAbs);
+			$submission->setAbstract($ta->nodeValue, $this->commonLangs[$xmlLang]);
+		}
+
+		//obtener la seccion del articulo
+		$articleCategories = $xml->getElementsByTagName("subject");
+		foreach ($articleCategories as $k => $ac) {
+			$categoria = $ac->nodeValue;
+			$submission->setCategoria($categoria);
+		}
+
+		//obtener los ids de redalyc
+		$journal_id_nodo = $xml->getElementsByTagName("journal-id");
+		$journal_id = "";
+		foreach ($journal_id_nodo as $k => $tl) {
+			$journal_id = $tl->nodeValue;
+		}
+		$submission->setIdJournalRedalyc($journal_id);
+
+		$article_id_nodo = $xml->getElementsByTagName("article-id");
+		$article_id = "";
+		foreach ($article_id_nodo as $k => $tl) {
+			$pub_id_type = $tl->getAttribute('pub-id-type');
+			if($pub_id_type=="art-access-id"){
+				$article_id = $tl->nodeValue;
+			}
+			
+		}
+
+		$submission->setIdArticleRedalyc($article_id);
+
+		$submission->setNumero($mi_numero);
+
+		//Datos de Autores
+		$xpath = new DOMXPath($xml);
+		$authors = $xpath->query("//contrib-group/contrib[@contrib-type='author']");
+		$contador_autores = 0;
+		foreach ($authors as $k => $author) {
+			try {
+				$authorSurName = $xpath->query("//name/surname", $author);
+				$authorSurName = $authorSurName[$k]->textContent;
+			} catch (Exception $e) {
+				$authorSurName = "";
+			}
+
+			try {
+				$authorGivenName = $xpath->query("//name/given-names", $author);
+				$authorGivenName = $authorGivenName[$k]->textContent;
+			} catch (Exception $e) {
+				$authorGivenName = "";
+			}
+
+			try {
+				$authorEmail = $xpath->query(".//email", $author);
+				if(count($authorEmail)!=0){
+					$authorEmail = $authorEmail[0]->textContent;
+				}else{
+					$authorEmail = "";
+				}
+			} catch (Exception $e) {
+				
+			}
+
+			try {
+				$authorXref = $xpath->query(".//xref/@rid", $author);
+				$authorXref = $authorXref[0]->textContent;
+				$aff = $xpath->query(".//aff[@id='" . $authorXref . "']");
+				$aff = $aff[0];
+				$authorInstitution = $xpath->query(".//institution", $aff);
+				$authorInstitution = $authorInstitution[0]->textContent;
+			} catch (Exception $e) {
+				$authorInstitution = "";
+			}
+
+			try {
+				$authorCountry = $xpath->query(".//country/@country", $aff);
+				$authorCountry = $authorCountry[0]->textContent;
+			} catch (Exception $e) {
+				$authorCountry = "";
+			}
+
+			$autor = new Autor();
+			$autor->setNombre($authorGivenName);
+			$autor->setApellidos($authorSurName);
+			$autor->setInstitucion($authorInstitution);
+			$autor->setPais($authorCountry);
+			$autor->setEmail($authorEmail);
+			$submission->setAutor($autor, $contador_autores);
+			$contador_autores++;
+		}
+		return $submission;
 	}
 
 	/**
@@ -726,7 +1096,10 @@ class MarcalycImportPlugin extends ImportExportPlugin
 	}
 
 	/**
-	 * 
+	 * Metodo para la descompresion de archivos
+	 * @param string $filePath Ruta del zip
+	 * @param bool $allInSubDirectories Permite manejar si se desea descomprimir todos los archivos
+	 * @return string nombre del archivo descomprimido
 	 */
 	private function decompressZipFile($filePath, &$errorMsg, $allInSubDirectories)
 	{
@@ -762,6 +1135,31 @@ class MarcalycImportPlugin extends ImportExportPlugin
 
 			return $filePath . '_1';
 		}
+	}
+
+	/**
+	 * Permite quitar archivos que se encuentran dentro de la carpeta MACOSX
+	 * los cuales se consideran basura
+	 * 
+	 * @param array $archivos Es un array de archivos
+	 * @return array $files Array con los archivos limpios
+	 */
+	private function quitar_archivos_basura($archivos)
+	{
+		$files = array();
+		foreach ($archivos as $file) {
+			if (strpos($file, '__MACOSX') === false) {
+				array_push($files, $file);
+			}
+		}
+		return $files;
+	}
+
+	/** */
+	private function cleanFileList($dirs)
+	{
+		$dirs = array_diff($dirs, array('.', '..', '__MACOSX', '.DS_Store'));
+		return $dirs;
 	}
 
 	/**

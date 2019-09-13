@@ -25,4 +25,14 @@
 	</message>
 	<message key="plugins.importexport.marcalycImporter.again">Import another file</message>
 	<message key="plugins.importexport.marcalycImporter.noContent">no information found</message>
+	<message key="plugins.importexport.marcalycImporter.ver_numeros">go to Future Issues</message>
+
+	<message key="plugins.importexport.marcalycImporter.registrationIntro">
+		In order to use the Redalyc Viewer button, enter the URL</message>
+	<message key="plugins.importexport.marcalycImporter.validarURL">Validate the availability of the Marcalyc service?</message>
+	<message key="plugins.importexport.marcalycImporter.url_visor">Example: http://www.redalyc.org/jatsRepo/</message>
+	<message key="plugins.importexport.marcalycImporter.updateOld">
+		Update records with this URL?
+	</message>
+	<message key="plugins.importexport.marcalycImporter.settingsDescription">This URL allows you to access the file viewer</message>
 </locale>

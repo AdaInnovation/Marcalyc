@@ -17,6 +17,9 @@ unzip = /usr/bin/unzip
 ## ⭐️ Author
 
 - Github: [@AdaInnovation](https://github.com/AdaInnovation)<br>
+- eScire [@eScire] (http://escire.mx)
+- AmeliCA
+
 ## 🤝 Contributing
 
 Contribuciones, problemas y solicitudes de funciones son bienvenidas.<br />
