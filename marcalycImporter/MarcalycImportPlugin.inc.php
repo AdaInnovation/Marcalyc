@@ -21,6 +21,7 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 	var $submission;
 	var $request;
 
+
 	var $commonLangs = array(
 		'ca' =>	'ca_ES',
 		'es' => 'es_ES',
@@ -98,9 +99,7 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 	}
 
 	function depositXML($objects, $context, $jsonString)
-	{
-
-	}
+	{ }
 
 	/**
 	 * Display the plugin.
@@ -151,7 +150,7 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 
 			case 'import':
 				$statusMsg = "";
-				$Errores="";
+				$Errores = "";
 				AppLocale::requireComponents(LOCALE_COMPONENT_PKP_SUBMISSION);
 				$temporaryFileId = $request->getUserVar('temporaryFileId');
 				$temporaryFileDao = DAORegistry::getDAO('TemporaryFileDAO');
@@ -194,7 +193,7 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 					return $json->getString();
 				}
 
-				if(!is_array($articleData)){
+				if (!is_array($articleData)) {
 					$templateMgr->assign('Errores', $articleData);
 					$json = new JSONMessage(true, $templateMgr->fetch($this->getTemplateResource('results.tpl')));
 					header('Content-Type: application/json');
@@ -221,7 +220,7 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 					$this->insert_files_epub($processingFilePath, $data->article_id_redalyc, $request->getContext()->getId());
 					$this->insert_files_html($processingFilePath, $data->article_id_redalyc, $request->getContext()->getId());
 				}
-				
+
 
 				//imprimir resusltados
 				$imprimirTitulo = true;
@@ -245,14 +244,14 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 				$fileManager = new FileManager();
 				$fileManager->deleteByPath($temporaryFilePath);
 				$fileManager->rmtree($temporaryFilePath . "_1");
-				
-				$protocolo= $request->_protocol;
-				$servidor= $request->_serverHost;
-				$aplicacion=$request->_basePath;
+
+				$protocolo = $request->_protocol;
+				$servidor = $request->_serverHost;
+				$aplicacion = $request->_basePath;
 				$nombre_revista = $request->getRequestedJournalPath();
-				
+
 				// url para el boton de ver numeros
-				$ver_numeros_url=$protocolo."://".$servidor.$aplicacion."/index.php/".$nombre_revista."/manageIssues#futureIssues";
+				$ver_numeros_url = $protocolo . "://" . $servidor . $aplicacion . "/index.php/" . $nombre_revista . "/manageIssues#futureIssues";
 
 				$templateMgr->assign('numeros_url', $ver_numeros_url);
 				$templateMgr->assign('Resultados', $resultados);
@@ -274,10 +273,10 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 	 * @param bool $validarNum Opcion para evitar validar todos los numero si son iguales
 	 * @return Articulo $articulo El mismo objeto con los datos validados
 	 */
-	function validarArticulo($articulo,$validarNum)
+	function validarArticulo($articulo, $validarNum)
 	{
 		//validar numero
-		if($validarNum){
+		if ($validarNum) {
 			$numero = $articulo->getNumero()->getNumber();
 			$volume = $articulo->getNumero()->getVolume();
 			$anio = $articulo->getNumero()->getYear();
@@ -287,23 +286,23 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 			} else {
 				$articulo->getNumero()->setStatus(404);
 			}
-		}else{
+		} else {
 			$articulo->getNumero()->setStatus(404);
 		}
-		
+
 		//validar seccion
-		
-		if($articulo->categoria_articulo=="Sin sección" || $articulo->categoria_articulo==""){
-			$existe_seccion=$this->validarSeccion();
-		}else{
-			$existe_seccion=$this->validarSeccion($articulo->categoria_articulo);
+
+		if ($articulo->categoria_articulo == "Sin sección" || $articulo->categoria_articulo == "") {
+			$existe_seccion = $this->validarSeccion();
+		} else {
+			$existe_seccion = $this->validarSeccion($articulo->categoria_articulo);
 		}
 
-		if($existe_seccion==null){
-			$existe_seccion=$this->add_section($articulo->categoria_articulo);
+		if ($existe_seccion == null) {
+			$existe_seccion = $this->add_section($articulo->categoria_articulo);
 		}
 
-		$articulo->categoria_id=$existe_seccion;
+		$articulo->categoria_id = $existe_seccion;
 
 		return $articulo;
 	}
@@ -393,16 +392,16 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 	private function insert_files_html($path, $idArticleRedalyc, $context_id)
 	{
 		$todas_las_concidencias = $this->findFilesByName($path, $idArticleRedalyc, "png");
-		if(empty($todas_las_concidencias)){
+		if (empty($todas_las_concidencias)) {
 			//buscar en los archivos txt
 			$todas_las_concidencias = $this->findFilesByName($path, $idArticleRedalyc, "txt");
-			
-			if(empty($todas_las_concidencias)){
+
+			if (empty($todas_las_concidencias)) {
 				return null;
 			}
 		}
 
-		
+
 
 		$coincidencias = $this->quitar_archivos_basura($todas_las_concidencias);
 		$path_html_directory = $this->find_path_html($coincidencias);
@@ -496,7 +495,7 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 			$submission->setTitle($tl, $k);
 		}
 
-		if( isset($datos_articulo->abstract)){
+		if (isset($datos_articulo->abstract)) {
 			foreach ($datos_articulo->abstract as $k => $al) {
 				$submission->setAbstract($al, $k);
 			}
@@ -608,13 +607,13 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 			//insertar a DB
 			import('lib.pkp.classes.file.SubmissionFileManager');
 			$submissionFileManager = new SubmissionFileManager($journal_id, $submission_id);
-			try{
+			try {
 				$submissionFile = $submissionFileManager->_instantiateSubmissionFile($file, $fileStage, $revisedFileId, $genreId, $assocType, $assocId);
-			}catch(Exception $e){
-				$error=$e;
-				$er="";
+			} catch (Exception $e) {
+				$error = $e;
+				$er = "";
 			}
-			
+
 
 			if (is_null($submissionFile)) return null;
 			//obtener el tipo de archivo
@@ -689,32 +688,33 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 	 * @param string $seccion_name Nombre de la seccion a agregar
 	 * @return int $sectionId Id de la seccion insertada
 	 */
-	private function add_section($section_name){
+	private function add_section($section_name)
+	{
 		$sectionDao = DAORegistry::getDAO('SectionDAO');
 		$journal = Application::getRequest()->getJournal();
 
 		$locale = AppLocale::getLocale();
-		$valor_vacio = array($locale=>"");
-		$title=array($locale=>$section_name);
+		$valor_vacio = array($locale => "");
+		$title = array($locale => $section_name);
 
-		$abr= str_split($section_name, 2);
+		$abr = str_split($section_name, 2);
 		$section = $sectionDao->newDataObject();
 		$section->setJournalId($journal->getId());
-		$section->setTitle($title, null); 
-		$section->setAbbrev($abr[0],null); 
+		$section->setTitle($title, null);
+		$section->setAbbrev($abr[0], null);
 		$section->setReviewFormId(0);
-		$section->setMetaIndexed(1); 
-		$section->setMetaReviewed(1); 
+		$section->setMetaIndexed(1);
+		$section->setMetaReviewed(1);
 		$section->setAbstractsNotRequired(0);
-		$section->setIdentifyType($valor_vacio,null);
+		$section->setIdentifyType($valor_vacio, null);
 		$section->setEditorRestricted(0);
 		$section->setHideTitle(0);
 		$section->setHideAuthor(0);
-		$section->setPolicy($valor_vacio,null); 
+		$section->setPolicy($valor_vacio, null);
 		$section->setAbstractWordCount(0);
 
 		$section->setSequence(REALLY_BIG_NUMBER);
-		$sectionId=$sectionDao->insertObject($section);
+		$sectionId = $sectionDao->insertObject($section);
 		$sectionDao->resequenceSections($journal->getId());
 		return $sectionId;
 	}
@@ -805,7 +805,7 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 	private function validarNumero($volume, $number, $year)
 	{
 		$journal = $this->request->getJournal();
-		
+
 		$issueDao = DAORegistry::getDAO('IssueDAO');
 		$result = $issueDao->retrieve(
 			'SELECT i.* FROM issues i WHERE journal_id = ? AND volume = ? AND number = ? AND year = ?',
@@ -823,7 +823,8 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 	 * @return int $row["section_id"] Id de la Seccion encontrada o null en caso de no encontrar la seccion
 	 * 
 	 */
-	private function validarSeccion($seccion="Articulos"){
+	private function validarSeccion($seccion = "Articulos")
+	{
 		$sectionDao = DAORegistry::getDAO('SectionDAO');
 		$journal = Application::getRequest()->getJournal();
 
@@ -831,12 +832,11 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 		$sql = 'SELECT section_id FROM section_settings WHERE setting_value = ?';
 		$result = $sectionDao->retrieve($sql, $params);
 		if ($result->RecordCount() != 0) {
-			$row=$result->GetRowAssoc(false);
+			$row = $result->GetRowAssoc(false);
 			return $row["section_id"];
 		}
 		$result->Close();
 		return null;
-		
 	}
 
 	/**
@@ -852,53 +852,61 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 		$dirs = scandir($articleFolder);
 		//Se limpia la ruta de archivos basura
 		$dir = array_values($this->cleanFileList($dirs));
+		$dir = $this->cleanFileList($dir);
 		$articleDir = str_replace(' ', '\ ', $articleFolder . DIRECTORY_SEPARATOR . $dir[0]);
 		//Se buscan todos los archivos xml
 		$xmlFiles = $this->findFilesByExtension($articleDir, 'xml');
 		$contador_articulos = 0;
 
-		$numero="";
-		$volumen="";
-		$error="";
+		$numero = "";
+		$volumen = "";
+		$error = "";
 		foreach ($xmlFiles as $xf) {
 			$xmlJats = file_get_contents($xf);
-			$xmlJatsDom = new DOMDocument();
-			if (!$xmlJatsDom->loadXML($xmlJats)) {
-				//Error al abrir el xml
-				return false;
-			}
+			$pos = strpos($xf, "__MACOSX");
+			if (!$pos) {
+				$xmlJatsDom = new DOMDocument();
+				if (!$xmlJatsDom->loadXML($xmlJats)) {
+					//Error al abrir el xml
 
-			$datos_articulo = $this->leerXML($xmlJatsDom, $this->request, $contador_articulos);
-			
-			$validar_existencia_numero=true;
-			if($contador_articulos==0){
-				$numero = $datos_articulo->getNumero()->getNumber();
-				$volumen = $datos_articulo->getNumero()->getVolume();
-			}else{
-				$numero_a = $datos_articulo->getNumero()->getNumber();
-				$volume_a = $datos_articulo->getNumero()->getVolume();
-				//Valida que el los articulos pertenescan al mismo volumen y numero
-				if($numero == $numero_a && $volumen == $volume_a){
-					$validar_existencia_numero=false;
-				}else{
-					$error.="Error: No coinciden Volumen-Numero en el ID: ".$datos_articulo->article_id_redalyc."</br>";
+					return "Error archivo: " . $xf;
+				} else {
+					$datos_articulo = $this->leerXML($xmlJatsDom, $this->request, $contador_articulos);
+
+					$validar_existencia_numero = true;
+					if ($contador_articulos == 0) {
+						$numero = $datos_articulo->getNumero()->getNumber();
+						$volumen = $datos_articulo->getNumero()->getVolume();
+					} else {
+						$numero_a = $datos_articulo->getNumero()->getNumber();
+						$volume_a = $datos_articulo->getNumero()->getVolume();
+						//Valida que el los articulos pertenescan al mismo volumen y numero
+						if ($numero == $numero_a && $volumen == $volume_a) {
+							$validar_existencia_numero = false;
+						} else {
+							$error .= "Error: No coinciden Volumen-Numero en el ID: " . $datos_articulo->article_id_redalyc . "</br>";
+						}
+					}
+
+					//Se validan las datos que contiene este articulo
+					$datos_articulo = $this->validarArticulo($datos_articulo, $validar_existencia_numero);
+
+					//Se agrega un error en caso de existir el Numero en la base de datos
+					if ($datos_articulo->getNumero()->Status == 202) {
+						$error .= "Error: Ya existe el Volumen " . $volumen . " Numero " . $numero;
+					}
+
+					array_push($articleData, $datos_articulo);
 				}
 			}
 
-			//Se validan las datos que contiene este articulo
-			$datos_articulo = $this->validarArticulo($datos_articulo, $validar_existencia_numero);
-			
-			//Se agrega un error en caso de existir el Numero en la base de datos
-			if($datos_articulo->getNumero()->Status==202){
-				$error.="Error: Ya existe el Volumen ".$volumen." Numero ".$numero;
-			}
 
-			array_push($articleData, $datos_articulo);
+
 			$contador_articulos++;
 		}
 
 		// Si contienen errores la lectura del archivo se regresan estos
-		if($error!=""){
+		if ($error != "") {
 			return $error;
 		}
 
@@ -918,15 +926,15 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 		//objeto principal
 		$submission = new Articulo($index, "", "");
 		$journal = $this->request->getJournal();
-		
+
 		$issueMonth = $xml->getElementsByTagName('season');
-		if(sizeof($issueMonth)==0){
+		if (sizeof($issueMonth) == 0) {
 			$issueMonth = "";
-		}else{
+		} else {
 			$issueMonth = $issueMonth->item(0)->nodeValue;
 		}
-		
-		
+
+
 		$issueYear = $xml->getElementsByTagName('year');
 		$issueYear = $issueYear->item(0)->nodeValue;
 		$issueNumber = $xml->getElementsByTagName('issue');
@@ -938,7 +946,7 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 
 		//se guardan los datos del numero en el objeto Numero
 		$mi_numero = new Numero($journal->getId(), $issueMonth, $volume, $numero, $anio);
-		
+
 		$lang = $xml->getElementsByTagName("article")[0]->getAttribute('xml:lang');
 		$submission->setLanguage($lang);
 		//obtiene el titulo del articulo
@@ -947,10 +955,9 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 		foreach ($titleLang as $k => $tl) {
 			$xmlLang = $tl->getAttribute('xml:lang');
 			$titulo_articulo = $tl->nodeValue;
-			if($xmlLang!=""){
+			if ($xmlLang != "") {
 				$submission->setTitle($titulo_articulo, $this->commonLangs[$xmlLang]);
 			}
-			
 		}
 		//obtine el idioma principal
 		$abstractLang = $xml->getElementsByTagName("abstract");
@@ -989,10 +996,9 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 		$article_id = "";
 		foreach ($article_id_nodo as $k => $tl) {
 			$pub_id_type = $tl->getAttribute('pub-id-type');
-			if($pub_id_type=="art-access-id"){
+			if ($pub_id_type == "art-access-id") {
 				$article_id = $tl->nodeValue;
 			}
-			
 		}
 
 		$submission->setIdArticleRedalyc($article_id);
@@ -1020,13 +1026,13 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 
 			try {
 				$authorEmail = $xpath->query(".//email", $author);
-				if(count($authorEmail)!=0){
+				if (count($authorEmail) != 0) {
 					$authorEmail = $authorEmail[0]->textContent;
-				}else{
+				} else {
 					$authorEmail = "";
 				}
 			} catch (Exception $e) {
-				
+				$authorEmail = "";
 			}
 
 			try {
@@ -1044,7 +1050,7 @@ class MarcalycImportPlugin extends PubObjectsExportPlugin
 				$authorCountry = $xpath->query(".//country/@country", $aff);
 				$authorCountry = $authorCountry[0]->textContent;
 			} catch (Exception $e) {
-				$authorCountry = "";
+				$authorCountry = "Vacio";
 			}
 
 			$autor = new Autor();
