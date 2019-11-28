@@ -57,6 +57,7 @@ class Articulo{
     var $status;
     var $journal_id_redalyc;
     var $article_id_redalyc;
+    var $Galleys;
 
     
     public function __construct($id,$categoria){
@@ -88,6 +89,10 @@ class Articulo{
         $this->categoria_articulo=$categoria;
     }
 
+    function setStatus($status){
+        $this->status=$status;
+    }
+
     function setIdJournalRedalyc($idJournalRedalyc){
         $this->journal_id_redalyc=$idJournalRedalyc;
     }
@@ -106,6 +111,10 @@ class Articulo{
 				$this->$key[$locale] = $value;
 			}
 		}
+    }
+
+    function setGalleys($galleys){
+        $this->Galleys = $galleys;
     }
 
     function getNumero(){
@@ -155,4 +164,30 @@ class Autor{
     }
 }
 
+//Datos de los archivos de galeria
+
+class Galeria{
+    var $id;
+    var $nombre;
+    var $ruta;
+    var $tipo;
+    var $estatus;
+
+    function setId($id){
+        $this->id = $id;
+    }
+
+    function setNombre($nombre){
+        $this->nombre= $nombre;
+    }
+    function setRuta($ruta){
+        $this->ruta = $ruta;
+    }
+    function setTipo($tipo){
+        $this->tipo=$tipo;
+    }
+    function setEstatus($estatus){
+        $this->estatus = $estatus;
+    }
+}
 ?>

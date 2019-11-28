@@ -31,5 +31,4 @@
 	<message key="plugins.importexport.marcalycImporter.updateOld">¿Actualizar los registros con esta URL?</message>
 	<message key="plugins.importexport.marcalycImporter.settingsDescription">Esta URL le permite acceder al visor de archivos</message>
 	
-	
 </locale>
